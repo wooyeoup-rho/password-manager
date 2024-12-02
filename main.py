@@ -1,7 +1,7 @@
 from tkinter import *
 from tkinter import messagebox
 from customtkinter import CTkEntry, CTkLabel, CTkButton, CTkCheckBox, CTkSlider
-import pyglet, os, sys, pandas, random
+import pyglet, os, sys, pandas, random, pyperclip
 
 # ---------------------------- CONSTANTS ------------------------------- #
 MAIN_FONT = "IBM Plex Sans"
@@ -88,6 +88,7 @@ def generate_password():
         random_character = random.choice(random_list)
         password += random_character
 
+    pyperclip.copy(password)
     pwd_entry.insert(0, "".join(password))
 
 # ---------------------------- SAVE PASSWORD ------------------------------- #
