@@ -1,7 +1,7 @@
 from tkinter import *
 from tkinter import messagebox
 from customtkinter import CTkEntry, CTkLabel, CTkButton, CTkCheckBox, CTkSlider
-import pyglet, os, sys, pandas, random, pyperclip
+import pyglet, os, sys, random, pyperclip, json
 
 # ---------------------------- CONSTANTS ------------------------------- #
 MAIN_FONT = "IBM Plex Sans"
@@ -91,53 +91,96 @@ def generate_password():
     pyperclip.copy(password)
     pwd_entry.insert(0, "".join(password))
 
+# ---------------------------- SEARCH WEBSITE ------------------------------- #
+def search_website():
+    silent_option = silent_toggle.get()
+    website = website_entry.get()
+
+    if len(website) == 0:
+        if silent_option:
+            dialog_label.configure(text="Don't leave the website field empty!")
+        else:
+            messagebox.showwarning("Oops", "Don't leave the website field empty!")
+    else:
+        try:
+            with open("data.json", "r") as data_file:
+                data = json.load(data_file)
+                credentials = data[website]
+        except FileNotFoundError:
+            if silent_option:
+                dialog_label.configure(text="No data file. Save some credentials first!")
+            else:
+                messagebox.showerror("No data", "There's no data.json.\nDid you save any credentials?")
+        except KeyError:
+            if silent_option:
+                dialog_label.configure(text="No match. Check spelling/capitalization.")
+            else:
+                messagebox.showerror("No match", "There was no match.\nDid you use the correct spelling and capitalization?")
+        else:
+            user_id = credentials["user_id"]
+            password = credentials["password"]
+            if silent_option:
+                dialog_label.configure(text="Match. Credentials filled below.")
+
+                username_entry.delete(0, END)
+                pwd_entry.delete(0, END)
+
+                username_entry.insert(0, user_id)
+                pwd_entry.insert(0, password)
+            else:
+                messagebox.showinfo(website, f"User ID: {user_id}\nPassword: {password}")
+
 # ---------------------------- SAVE PASSWORD ------------------------------- #
 def save_password():
-    website_text = website_entry.get()
-    username_text = username_entry.get()
-    pwd_text = pwd_entry.get()
     user_option = username_toggle.get()
     silent_option = silent_toggle.get()
 
-    if len(website_text) == 0 or len(username_text) == 0 or len(pwd_text) == 0:
+    website = website_entry.get()
+    username = username_entry.get()
+    password = pwd_entry.get()
+
+    if len(website) == 0 or len(username) == 0 or len(password) == 0:
         if silent_option:
             dialog_label.configure(text="Don't leave any fields empty!")
         else:
             messagebox.showwarning("Oops", "Don't leave any fields empty!")
     else:
         if not silent_option:
-            confirm_save = messagebox.askokcancel(title=website_text,
+            confirm_save = messagebox.askokcancel(title=website,
                                                   message=f"Details entered:\n"
-                                                                              f"\nWebsite: {website_text}"
-                                                                              f"\nUser ID: {username_text}"
-                                                                              f"\nPassword: {pwd_text}\n"
+                                                                              f"\nWebsite: {website}"
+                                                                              f"\nUser ID: {username}"
+                                                                              f"\nPassword: {password}\n"
                                                                               f"\nConfirm save?"
                                               )
 
         if silent_option or confirm_save:
-            file_name = "data.txt"
-            new_entry = {
-                "website": [website_text],
-                "user_id": [username_text],
-                "password": [pwd_text]
+
+            new_data = {
+                website: {
+                    "user_id": username,
+                    "password": password
+                }
             }
-            new_df = pandas.DataFrame(new_entry)
 
-            # Checks for existing file
-            if os.path.exists(file_name):
-                curr_df = pandas.read_csv(file_name, sep="\t")
-                update_df = pandas.concat([curr_df, new_df], ignore_index=True)
+            try:
+                with open("data.json", "r") as data_file:
+                    data = json.load(data_file)
+            except FileNotFoundError:
+                with open("data.json", "w") as data_file:
+                    json.dump(new_data, data_file, indent=4)
             else:
-                update_df = new_df
+                data.update(new_data)
 
-            update_df.to_csv(file_name, sep="\t", index=False)
-
-            # Deletes fields
-            dialog_label.configure(text="")
-            website_entry.delete(0, END)
-            pwd_entry.delete(0, END)
-            if user_option == 0:
-                username_entry.delete(0, END)
+                with open("data.json", "w") as data_file:
+                    json.dump(data, data_file, indent=4)
+            finally:
+                # Deletes fields
+                dialog_label.configure(text="")
+                website_entry.delete(0, END)
+                pwd_entry.delete(0, END)
+                if user_option == 0:
+                    username_entry.delete(0, END)
 
 # ---------------------------- ANIMATION ------------------------------- #
 def animation():
@@ -208,10 +251,12 @@ dialog_label.grid(row=1, column=1, columnspan=2, sticky="w")
 
 # WEBSITE
 website_label = CTkLabel(master=window, text="Website", anchor="w", font=(MAIN_FONT, 14, "bold"), text_color=DARK)
-website_entry = CTkEntry(master=window, width=320, font=(MAIN_FONT, 14), fg_color=LIGHT, text_color=DARK)
+website_entry = CTkEntry(master=window, width=240, font=(MAIN_FONT, 14), fg_color=LIGHT, text_color=DARK)
+website_search = CTkButton(master=window, command=search_website, text="Search", width=75, font=(MAIN_FONT, 14), fg_color=MID, hover_color=DARK, text_color=LIGHT)
 website_entry.focus()
 website_label.grid(row=2, column=0, sticky="w")
-website_entry.grid(row=2, column=1, columnspan=2)
+website_entry.grid(row=2, column=1, sticky="w")
+website_search.grid(row=2, column=2, sticky="e")
 
 # USER ID
 username_label = CTkLabel(master=window, text="User ID", anchor="w", font=(MAIN_FONT, 14, "bold"), text_color=DARK)
@@ -222,13 +267,13 @@ username_entry.grid(row=3, column=1, columnspan=2)
 # PASSWORD
 pwd_label = CTkLabel(master=window, text="Password", anchor="w", font=(MAIN_FONT, 14, "bold"), text_color=DARK)
 pwd_entry = CTkEntry(master=window, width=240, font=(MAIN_FONT, 14), fg_color=LIGHT, text_color=DARK)
-pwd_generate_button = CTkButton(master=window, command=generate_password, text="Generate", width=60, font=(MAIN_FONT, 14), fg_color=MID, hover_color=DARK, text_color=LIGHT)
-pwd_add_button = CTkButton(master=window, command=save_password, text="Add", width=320, font=(MAIN_FONT, 14), fg_color=MID, hover_color=DARK, text_color=LIGHT)
+pwd_generate_button = CTkButton(master=window, command=generate_password, text="Generate", width=75, font=(MAIN_FONT, 14), fg_color=MID, hover_color=DARK, text_color=LIGHT)
+pwd_save_button = CTkButton(master=window, command=save_password, text="Save", width=320, font=(MAIN_FONT, 14), fg_color=MID, hover_color=DARK, text_color=LIGHT)
 
 pwd_label.grid(row=4, column=0, sticky="w")
 pwd_entry.grid(row=4, column=1, sticky="w")
 pwd_generate_button.grid(row=4, column=2, sticky="e")
-pwd_add_button.grid(row=5, column=1, columnspan=2, sticky="w")
+pwd_save_button.grid(row=5, column=1, columnspan=2, sticky="w")
 
 # PASSWORD SETTINGS
 length_slider = CTkSlider(master=window, command=password_slider, number_of_steps=98, from_=1, to=99, fg_color=LIGHT, border_color=BACKGROUND, progress_color=DARK, button_color=MID, button_hover_color=MID, width=320)
